@@ -1,0 +1,111 @@
+.carousel-container {
+  text-align: center;
+  padding: 20px;
+  font-family: sans-serif;
+}
+
+.search-form {
+  margin-bottom: 20px;
+}
+
+.search-form input {
+  padding: 8px;
+  width: 200px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+.search-form button {
+  padding: 8px 12px;
+  margin-left: 5px;
+  border: none;
+  background: #2196f3;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.carousel {
+  display: flex;
+  gap: 15px;
+  overflow-x: auto;
+  justify-content: center;
+  scroll-behavior: smooth;
+}
+
+.carousel-item {
+  position: relative;
+  flex: 0 0 auto;
+  transition: transform 0.3s ease;
+}
+
+/* Shared media style */
+.carousel-item img,
+.carousel-item video {
+  width: 250px;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.3s ease, z-index 0.3s ease;
+}
+
+/* ✅ Only images zoom on hover */
+.carousel-item:hover img {
+  transform: scale(2);
+  z-index: 10;
+}
+
+/* 🚫 Videos stay static (no zoom, no hover effect) */
+.carousel-item video {
+  transform: none;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+/* Add button styling */
+.add-link {
+  display: inline-block;
+  margin-top: 20px;
+  background: #4caf50;
+  color: white;
+  padding: 10px 15px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.3s;
+}
+
+.add-link:hover {
+  background: #45a049;
+}
+
+.fade-out {
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+}
+
+/* Modal overlay fills the viewport */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999; /* very high to appear above all */
+}
+
+/* Modal content */
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  max-width: 90%;
+  max-height: 90%;
+  overflow: auto;
+  text-align: center;
+  position: relative;
+}

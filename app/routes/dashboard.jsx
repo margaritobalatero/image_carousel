@@ -1,155 +1,234 @@
-// app/routes/dashboard.jsx
-import { json, redirect } from "@remix-run/node";
 import { useLoaderData, Form } from "@remix-run/react";
-import { requireUserSession } from "../utils/session.server.js";
-import { connectDb } from "../utils/db.server.js";
-import Image from "../utils/image.model.js";
+import { json, redirect } from "@remix-run/node";
+import { connectDB, Item } from "../utils/db.server.js";
+import { useState } from "react";
+import "../styles/carousel.css";
 
-// Loader → fetch user images
+// Loader: fetch items with optional search, newest first
 export async function loader({ request }) {
-  const userId = await requireUserSession(request);
-  await connectDb();
+  await connectDB();
+  const url = new URL(request.url);
+  const search = url.searchParams.get("q") || "";
 
-  const images = await Image.find({ createdBy: userId })
-    .sort({ createdAt: -1 })
-    .lean();
+  const items = await Item.find(
+    search ? { caption: new RegExp(search, "i") } : {}
+  ).sort({ _id: -1 });
 
-  // Convert ObjectId to string
-  const sanitizedImages = images.map((img) => ({
-    _id: img._id.toString(),
-    url: img.url,
-    caption: img.caption,
-  }));
-
-  return json({ images: sanitizedImages });
+  return json({ items, search });
 }
 
-// Action → handle CRUD
+// Action: handle delete and update requests
 export async function action({ request }) {
-  const userId = await requireUserSession(request);
-  await connectDb();
-
+  await connectDB();
   const formData = await request.formData();
-  const _action = formData.get("_action");
+  const _id = formData.get("_id");
+  const actionType = formData.get("action");
 
-  if (_action === "create") {
-    const url = formData.get("url");
+  if (actionType === "delete" && _id) {
+    await Item.findByIdAndDelete(_id);
+  }
+
+  if (actionType === "update" && _id) {
     const caption = formData.get("caption");
-    if (!url) return json({ error: "Image URL is required." }, { status: 400 });
-    await Image.create({ url, caption, createdBy: userId });
-    return redirect("/dashboard");
+    const mediaUrl = formData.get("mediaUrl");
+    await Item.findByIdAndUpdate(_id, { caption, mediaUrl });
   }
 
-  if (_action === "update") {
-    const id = formData.get("id");
-    const url = formData.get("url");
-    const caption = formData.get("caption");
-    await Image.findOneAndUpdate({ _id: id, createdBy: userId }, { url, caption });
-    return redirect("/dashboard");
-  }
+  return redirect("/dashboard");
+}
 
-  if (_action === "delete") {
-    const id = formData.get("id");
-    await Image.deleteOne({ _id: id, createdBy: userId });
-    return redirect("/dashboard");
+// Utility: convert YouTube URL to embed
+function getYouTubeEmbedUrl(url) {
+  try {
+    const ytMatch = url.match(
+      /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w\-]{11})/
+    );
+    if (ytMatch && ytMatch[1]) {
+      return `https://www.youtube.com/embed/${ytMatch[1]}`;
+    }
+  } catch (err) {
+    console.error("YouTube parse error:", err);
   }
-
   return null;
 }
 
-// Dashboard component
 export default function Dashboard() {
-  const { images } = useLoaderData();
+  const { items, search } = useLoaderData();
+  const [editingId, setEditingId] = useState(null);
+  const [detailItem, setDetailItem] = useState(null); // for modal
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center p-6">
-      <div className="w-full max-w-4xl">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Image Dashboard</h1>
-          <Form action="/logout" method="post">
-            <button className="bg-red-600 px-4 py-2 rounded hover:bg-red-500">
-              Logout
-            </button>
-          </Form>
-        </div>
+    <div className="carousel-container">
+      <h1>🎠 Media Carousel</h1>
 
-        {/* Add new image */}
-        <Form method="post" className="bg-gray-800 p-6 rounded-xl mb-8">
-          <h2 className="text-xl font-semibold mb-3">Add New Image</h2>
-          <input
-            type="url"
-            name="url"
-            placeholder="Image URL"
-            className="w-full p-2 mb-3 rounded bg-gray-700 text-white"
-            required
-          />
-          <input
-            type="text"
-            name="caption"
-            placeholder="Caption (optional)"
-            className="w-full p-2 mb-3 rounded bg-gray-700 text-white"
-          />
-          <button
-            name="_action"
-            value="create"
-            className="bg-blue-600 w-full py-2 rounded hover:bg-blue-500"
-          >
-            Add Image
-          </button>
-        </Form>
+      {/* Search Form */}
+      <Form method="get" className="search-form">
+        <input
+          type="text"
+          name="q"
+          defaultValue={search}
+          placeholder="Search caption..."
+        />
+        <button type="submit">🔍 Search</button>
+      </Form>
 
-        {/* List of images */}
-        <div className="space-y-4">
-          {images.map((img) => (
-            <div
-              key={img._id}
-              className="bg-gray-800 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between"
-            >
-              <div className="flex-1">
-                <img
-                  src={img.url}
-                  alt={img.caption}
-                  className="h-32 w-48 object-cover rounded mb-2 sm:mb-0 sm:mr-4"
-                />
-                <p className="font-semibold">{img.caption || "No caption"}</p>
-              </div>
+      {/* Carousel */}
+      <div className="carousel">
+        {items.map((item) => {
+          const youtubeEmbed = getYouTubeEmbedUrl(item.mediaUrl);
+          const isEditing = editingId === item._id;
 
-              {/* Edit/Delete form */}
-              <Form method="post" className="flex flex-col sm:flex-row gap-2">
-                <input type="hidden" name="id" value={img._id} />
-                <input
-                  type="url"
-                  name="url"
-                  defaultValue={img.url}
-                  className="p-2 rounded bg-gray-700 text-white"
-                  required
-                />
-                <input
-                  type="text"
-                  name="caption"
-                  defaultValue={img.caption}
-                  className="p-2 rounded bg-gray-700 text-white"
-                />
+          return (
+            <div className="carousel-item" key={item._id}>
+              {item.type === "image" ? (
+                <img src={item.mediaUrl} alt={item.caption} />
+              ) : youtubeEmbed ? (
+                <iframe
+                  width="250"
+                  height="180"
+                  src={youtubeEmbed}
+                  title={item.caption}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  style={{ borderRadius: "12px" }}
+                ></iframe>
+              ) : (
+                <video
+                  src={item.mediaUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  style={{
+                    borderRadius: "12px",
+                    width: "250px",
+                    height: "180px",
+                    objectFit: "cover",
+                  }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              )}
+
+              <p>{item.caption}</p>
+
+              {/* Delete Button */}
+              <Form method="post" className="d-inline mb-1">
+                <input type="hidden" name="_id" value={item._id} />
+                <input type="hidden" name="action" value="delete" />
+                <button className="btn btn-danger btn-sm w-100">Delete</button>
+              </Form>
+
+              {/* Update Section */}
+              {isEditing ? (
+                <Form method="post" className="mt-1">
+                  <input type="hidden" name="_id" value={item._id} />
+                  <input type="hidden" name="action" value="update" />
+                  <input
+                    type="text"
+                    name="caption"
+                    defaultValue={item.caption}
+                    placeholder="Caption"
+                    className="form-control mb-1"
+                    required
+                  />
+                  <input
+                    type="text"
+                    name="mediaUrl"
+                    defaultValue={item.mediaUrl}
+                    placeholder="Media URL"
+                    className="form-control mb-1"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-success btn-sm w-100 mb-1"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm w-100"
+                    onClick={() => setEditingId(null)}
+                  >
+                    Cancel
+                  </button>
+                </Form>
+              ) : (
                 <button
-                  name="_action"
-                  value="update"
-                  className="bg-green-600 px-3 py-2 rounded hover:bg-green-500"
+                  className="btn btn-primary btn-sm w-100 mt-1"
+                  onClick={() => setEditingId(item._id)}
                 >
                   Update
                 </button>
-                <button
-                  name="_action"
-                  value="delete"
-                  className="bg-red-600 px-3 py-2 rounded hover:bg-red-500"
-                >
-                  Delete
-                </button>
-              </Form>
+              )}
+
+              {/* Detail Button */}
+              <button
+                className="btn btn-info btn-sm w-100 mt-1"
+                onClick={() => setDetailItem(item)}
+              >
+                Details
+              </button>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
+
+      {/* Modal for Detail */}
+      {detailItem && (
+        <div className="modal-overlay" onClick={() => setDetailItem(null)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>{detailItem.caption}</h3>
+            {detailItem.type === "image" ? (
+              <img
+                src={detailItem.mediaUrl}
+                alt={detailItem.caption}
+                style={{ maxWidth: "100%", borderRadius: "12px" }}
+              />
+            ) : getYouTubeEmbedUrl(detailItem.mediaUrl) ? (
+              <iframe
+                width="560"
+                height="315"
+                src={getYouTubeEmbedUrl(detailItem.mediaUrl)}
+                title={detailItem.caption}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                style={{ borderRadius: "12px" }}
+              ></iframe>
+            ) : (
+              <video
+                src={detailItem.mediaUrl}
+                controls
+                autoPlay
+                style={{ maxWidth: "100%", borderRadius: "12px" }}
+              >
+                Your browser does not support the video tag.
+              </video>
+            )}
+            <button
+              className="btn btn-secondary mt-2"
+              onClick={() => setDetailItem(null)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      <a href="/add" className="add-link">
+        ➕ Add Media
+      </a>
+      <br />
+      <a href="/login" className="add-link">
+        ➕ Logout
+      </a>
     </div>
   );
 }

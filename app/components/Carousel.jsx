@@ -1,65 +1,39 @@
-// app/components/Carousel.jsx
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 
-export default function Carousel({ images, currentIndex, setCurrentIndex, autoPlayInterval = 5000 }) {
-  const touchStartX = useRef(0);
-  const touchEndX = useRef(0);
+export default function Carousel({ items }) {
+  const [index, setIndex] = useState(0);
 
-  // Auto-play
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % images.length);
-    }, autoPlayInterval);
-    return () => clearInterval(timer);
-  }, [images, setCurrentIndex, autoPlayInterval]);
+  if (!items || items.length === 0) return <p>No media available.</p>;
 
-  if (!images || images.length === 0) return <p>No images to display.</p>;
+  const prev = () => setIndex((i) => (i === 0 ? items.length - 1 : i - 1));
+  const next = () => setIndex((i) => (i === items.length - 1 ? 0 : i + 1));
 
-  const next = () => setCurrentIndex((prev) => (prev + 1) % images.length);
-  const prev = () => setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
-
-  const handleTouchStart = (e) => (touchStartX.current = e.touches[0].clientX);
-  const handleTouchMove = (e) => (touchEndX.current = e.touches[0].clientX);
-  const handleTouchEnd = () => {
-    const delta = touchStartX.current - touchEndX.current;
-    if (delta > 50) next();
-    else if (delta < -50) prev();
-  };
+  const isVideo = (url) => /\.(mp4|webm|ogg)$/.test(url);
 
   return (
-    <div
-      className="w-full max-w-2xl mx-auto mb-8 relative overflow-hidden rounded-xl"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      <img
-        src={images[currentIndex].url}
-        alt={images[currentIndex].caption || `Image ${currentIndex + 1}`}
-        className="w-full h-64 sm:h-80 object-cover rounded-xl transition-transform duration-300"
-      />
-
-      {images[currentIndex].caption && (
-        <p className="absolute bottom-2 left-1/2 transform -translate-x-1/2 text-white bg-black bg-opacity-50 px-3 py-1 rounded">
-          {images[currentIndex].caption}
-        </p>
-      )}
-
-      <button
-        onClick={prev}
-        className="absolute top-1/2 left-2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white px-2 py-1 rounded hover:bg-opacity-75"
-      >
-        ‹
-      </button>
-      <button
-        onClick={next}
-        className="absolute top-1/2 right-2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white px-2 py-1 rounded hover:bg-opacity-75"
-      >
-        ›
-      </button>
-
-      <div className="absolute bottom-2 right-2 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
-        {currentIndex + 1} / {images.length}
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative w-full max-w-xl h-64 flex items-center justify-center bg-gray-800 rounded-xl overflow-hidden">
+        {isVideo(items[index].url) ? (
+          <video
+            src={items[index].url}
+            controls
+            autoPlay
+            muted
+            loop
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <img
+            src={items[index].url}
+            alt={items[index].caption}
+            className="w-full h-full object-cover"
+          />
+        )}
+      </div>
+      <p className="text-white">{items[index].caption}</p>
+      <div className="flex gap-4">
+        <button onClick={prev} className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500">Prev</button>
+        <button onClick={next} className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500">Next</button>
       </div>
     </div>
   );
